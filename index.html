@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Device-Locked PDF Reader</title>
+    <style>
+        :root { --primary: #3b82f6; --bg: #f3f4f6; }
+        body { font-family: sans-serif; margin: 0; background: var(--bg); display: flex; justify-content: center; align-items: center; height: 100vh; }
+        
+        #lock-screen { text-align: center; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 350px; z-index: 1000; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #msg { color: #ef4444; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+        .rpv-container { display: none; width: 100%; height: 100%; flex-direction: column; background: white; }
+        /* (The rest of the viewer CSS from previous steps) */
+        .rpv-toolbar { height: 40px; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 10px; gap: 15px; }
+        .rpv-main { display: flex; flex: 1; overflow: hidden; }
+        .rpv-body { flex: 1; background: #eee; overflow-y: auto; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        canvas { background: white; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<div id="lock-screen">
+    <h2 style="margin:0">Device Locked</h2>
+    <p style="color:#666; font-size: 14px;">This document is locked to the first device that uses the password.</p>
+    <input type="password" id="pass-input" placeholder="Enter Access Code">
+    <button onclick="attemptAccess()">Unlock Viewer</button>
+    <div id="msg"></div>
+</div>
+
+<div id="viewer-ui" class="rpv-container" oncontextmenu="return false;">
+    <div class="rpv-toolbar">
+        <span id="zoom-percent">100%</span>
+        <div style="border-left: 1px solid #ddd; height: 20px;"></div>
+        <span>Page: <span id="page-num">1</span></span>
+    </div>
+    <div class="rpv-main">
+        <div class="rpv-body" id="scroll-container">
+            <div id="pdf-area"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<script>
+   // --- CONFIGURATION ---
+// Add as many passwords as you need here
+const AUTHORIZED_PASSWORDS = [
+    "PASS_USER_01", 
+    "PASS_USER_02"
+];
+
+const pdfUrl = 'https://raw.githubusercontent.com/CoderMuhib10/pdfs/main/wordpress_30_day_plan.pdf';
+
+
+    // --- DEVICE FINGERPRINTING LOGIC ---
+    function getDeviceId() {
+        // Creates a unique string based on user agent and screen resolution
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl');
+        const debugInfo = gl ? gl.getExtension('WEBGL_debug_renderer_info') : null;
+        const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "";
+        
+        return btoa(`${navigator.userAgent}-${screen.width}x${screen.height}-${renderer}`);
+    }
+
+   // --- UPDATED ACCESS LOGIC ---
+function attemptAccess() {
+    const input = document.getElementById('pass-input').value;
+    const msg = document.getElementById('msg');
+    const currentDevice = getDeviceId();
+    
+    // 1. Check if the password exists in our list
+    if (!AUTHORIZED_PASSWORDS.includes(input)) {
+        msg.innerText = "Invalid Access Code!";
+        return;
+    }
+
+    // 2. We use the password as part of the key to distinguish between users
+    // This allows User A and User B to have separate device locks
+    const storageKey = `device_lock_${input}`;
+    const registeredDevice = localStorage.getItem(storageKey);
+
+    if (!registeredDevice) {
+        // First time this specific password is used: Lock it to this device
+        localStorage.setItem(storageKey, currentDevice);
+        unlock();
+    } else if (registeredDevice === currentDevice) {
+        // Returning user on the correct device
+        unlock();
+    } else {
+        // Correct password, but WRONG device
+        msg.innerText = "Error: This code is already registered to another device.";
+    }
+}
+
+    function unlock() {
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('viewer-ui').style.display = 'flex';
+        loadPDF();
+    }
+
+    // --- PDF RENDERING (Simplified for brevity) ---
+    async function loadPDF() {
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        
+        const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+        const container = document.getElementById('pdf-area');
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.2 });
+            const canvas = document.createElement('canvas');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            container.appendChild(canvas);
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+    }
+</script>
+</body>
+</html>
