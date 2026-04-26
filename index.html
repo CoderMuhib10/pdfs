@@ -18,14 +18,25 @@
         .toolbar { height: 50px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 100; font-size: 14px; }
         .viewport { flex: 1; overflow: auto; background: #525659; display: flex; flex-direction: column; align-items: center; padding-top: 10px; -webkit-overflow-scrolling: touch; }
         
-        /* Important: This prevents cropping */
-        canvas { 
-            max-width: 100% !important; 
-            height: auto !important; 
-            margin-bottom: 15px; 
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            background: #fff;
-        }
+       
+        /* This ensures the canvas never grows larger than the user's view */
+canvas { 
+    display: block;
+    max-width: 95vw !important; /* Leaves a tiny margin to prevent edge-cropping */
+    height: auto !important; 
+    margin: 0 auto 20px auto; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    background: white;
+}
+
+.viewport {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevents annoying horizontal scroll */
+    background: #525659;
+    padding: 20px 0;
+    -webkit-overflow-scrolling: touch;
+}
     </style>
 </head>
 <body>
@@ -97,35 +108,45 @@
         load();
     }
 
-    // 2. RESPONSIVE PDF RENDERING (Fixed Cropping)
-    async function load() {
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-        
-        const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-        document.getElementById('p-count').innerText = `Total Pages: ${pdf.numPages}`;
-        
-        const container = document.getElementById('content');
-        const screenWidth = window.innerWidth;
+   
+async function load() {
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    
+    const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+    document.getElementById('p-count').innerText = `Total Pages: ${pdf.numPages}`;
+    
+    const container = document.getElementById('content');
+    
+    // Use a slightly smaller width than the window to ensure no cropping
+    const availableWidth = window.innerWidth * 0.95; 
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            
-            // Calculate scale to fit the page exactly to the screen width
-            const unscaledViewport = page.getViewport({ scale: 1 });
-            const fitScale = (screenWidth - 20) / unscaledViewport.width;
-            
-            const viewport = page.getViewport({ scale: fitScale });
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            container.appendChild(canvas);
-            
-            await page.render({ canvasContext: ctx, viewport }).promise;
-        }
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        
+        // 1. Get the natural size of the PDF page
+        const originalViewport = page.getViewport({ scale: 1 });
+        
+        // 2. Calculate the scale needed to fit the screen width
+        const scale = availableWidth / originalViewport.width;
+        
+        // 3. Render at that specific scale
+        const viewport = page.getViewport({ scale: scale });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Match canvas dimensions to the viewport
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        container.appendChild(canvas);
+        
+        await page.render({ 
+            canvasContext: ctx, 
+            viewport: viewport 
+        }).promise;
     }
+}
 </script>
 </body>
 </html>
