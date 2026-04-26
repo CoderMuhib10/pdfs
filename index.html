@@ -3,86 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ultimate Protected PDF</title>
+    <title>Secure PDF Reader</title>
     <style>
-        :root { --primary: #2563eb; --toolbar-h: 50px; --sidebar-w: 45px; }
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #1a1a1a; font-family: sans-serif; }
-
-        /* --- Login Screen --- */
-        #lock-screen { position: fixed; inset: 0; background: white; z-index: 10000; display: flex; justify-content: center; align-items: center; padding: 20px; }
-        .login-card { width: 100%; max-width: 340px; text-align: center; }
-        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; margin: 20px 0; }
-        button.primary-btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
-
-        /* --- Main Layout --- */
-        .viewer-container { display: none; flex-direction: column; height: 100vh; width: 100vw; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #333; font-family: sans-serif; }
         
-        .toolbar { 
-            height: var(--toolbar-h); background: #fff; border-bottom: 1px solid #ddd;
-            display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 10;
-        }
+        /* Login UI */
+        #lock-screen { position: fixed; inset: 0; background: white; z-index: 999; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .box { padding: 30px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.1); width: 300px; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
 
-        .main-content { display: flex; flex: 1; overflow: hidden; position: relative; }
+        /* Viewer Layout */
+        #viewer { display: none; height: 100vh; flex-direction: column; width: 100%; }
+        .toolbar { height: 50px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 100; font-size: 14px; }
+        .viewport { flex: 1; overflow: auto; background: #525659; display: flex; flex-direction: column; align-items: center; padding-top: 10px; -webkit-overflow-scrolling: touch; }
         
-        .sidebar { 
-            width: var(--sidebar-w); background: #f8f9fa; border-right: 1px solid #ddd; 
-            display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 20px;
+        /* Important: This prevents cropping */
+        canvas { 
+            max-width: 100% !important; 
+            height: auto !important; 
+            margin-bottom: 15px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            background: #fff;
         }
-
-        .pdf-viewport { 
-            flex: 1; overflow-y: auto; overflow-x: auto; background: #525659; 
-            display: flex; flex-direction: column; align-items: center; padding: 15px;
-            scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
-        }
-
-        /* --- Page Styling --- */
-        .page-container { background: white; margin-bottom: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-width: 100%; }
-        canvas { display: block; max-width: 100%; height: auto !important; }
-
-        /* --- Mobile Responsiveness --- */
-        @media (max-width: 768px) {
-            .sidebar { display: none; } /* Hide sidebar on mobile */
-            .toolbar { height: 60px; font-size: 14px; }
-            .toolbar .desktop-only { display: none; }
-        }
-
-        /* --- Controls --- */
-        .controls-group { display: flex; align-items: center; gap: 10px; }
-        .status-msg { color: #dc2626; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="lock-screen">
-    <div class="login-card">
-        <h2>Secure Document</h2>
-        <p>This session is hardware-locked to your device.</p>
-        <input type="password" id="pass-input" placeholder="Access Code">
-        <button class="primary-btn" onclick="validateAccess()">Unlock Document</button>
-        <div id="msg" class="status-msg"></div>
+    <div class="box">
+        <h3>Secure Document</h3>
+        <p style="font-size: 12px; color: #666;">Locked to this specific browser instance.</p>
+        <input type="password" id="pass" placeholder="Password">
+        <button onclick="check()">Unlock</button>
+        <p id="err" style="color:red; font-size:12px;"></p>
     </div>
 </div>
 
-<div id="viewer-ui" class="viewer-container" oncontextmenu="return false;">
+<div id="viewer" oncontextmenu="return false;">
     <div class="toolbar">
-        <div class="controls-group">
-            <button onclick="toggleSidebar()" class="desktop-only">☰</button>
-            <span id="page-indicator">Page 1 / -</span>
-        </div>
-        <div class="controls-group">
-            <button onclick="changeZoom(-0.2)">➖</button>
-            <button onclick="changeZoom(0.2)">➕</button>
-            <button onclick="toggleFullScreen()">⛶</button>
+        <span id="p-count">Loading...</span>
+        <div>
+            <button onclick="location.reload()" style="width: auto; padding: 5px 10px; background: #666;">Logout</button>
         </div>
     </div>
-
-    <div class="main-content">
-        <div class="sidebar" id="sidebar">
-            <span>🖼️</span><span>🔖</span><span>🔍</span>
-        </div>
-        <div class="pdf-viewport" id="scroll-area">
-            <div id="render-target"></div>
-        </div>
+    <div class="viewport" id="scroll-box">
+        <div id="content"></div>
     </div>
 </div>
 
@@ -91,91 +57,75 @@
     const PASSWORDS = ["PASS_USER_01", "PASS_USER_02"];
     const pdfUrl = 'https://raw.githubusercontent.com/CoderMuhib10/pdfs/main/wordpress_30_day_plan.pdf';
 
-    // 1. ADVANCED FINGERPRINTING (Harder to spoof)
-    function getHardFingerprint() {
-        const gl = document.createElement('canvas').getContext('webgl');
-        const ext = gl?.getExtension('WEBGL_debug_renderer_info');
-        const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
-        // Combine CPU cores, GPU info, and RAM (if available)
-        return btoa(`${navigator.hardwareConcurrency}-${gpu}-${navigator.maxTouchPoints > 0}`);
+    // 1. IMPROVED STICKY LOCKING (UUID Method)
+    // This creates a permanent ID inside the browser storage that doesn't care about "Desktop Mode"
+    function getBrowserToken() {
+        let token = localStorage.getItem('app_browser_token');
+        if (!token) {
+            token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            localStorage.setItem('app_browser_token', token);
+        }
+        return token;
     }
 
-    async function validateAccess() {
-        const pass = document.getElementById('pass-input').value;
-        const msg = document.getElementById('msg');
-        
-        if (!PASSWORDS.includes(pass)) {
-            msg.innerText = "Access denied."; return;
+    function check() {
+        const p = document.getElementById('pass').value;
+        if (!PASSWORDS.includes(p)) { 
+            document.getElementById('err').innerText = "Wrong password."; 
+            return; 
         }
 
-        const deviceId = getHardFingerprint();
-        const storedId = localStorage.getItem(`lock_${pass}`);
+        const currentToken = getBrowserToken();
+        const savedToken = localStorage.getItem('lock_' + p);
 
-        if (!storedId) {
-            localStorage.setItem(`lock_${pass}`, deviceId);
-            startViewer();
-        } else if (storedId === deviceId) {
-            startViewer();
+        if (!savedToken) {
+            // First time using this password? Bind it to this browser's unique token
+            localStorage.setItem('lock_' + p, currentToken);
+            open();
+        } else if (savedToken === currentToken) {
+            // Same browser, same password
+            open();
         } else {
-            msg.innerText = "Error: Registered to a different hardware ID.";
+            // Correct password, but different browser/device
+            document.getElementById('err').innerText = "This code is locked to another device/browser.";
         }
     }
 
-    // 2. RESPONSIVE VIEWER LOGIC
-    let pdfDoc = null;
-    let scale = window.innerWidth < 768 ? 0.8 : 1.2;
-
-    async function startViewer() {
+    function open() {
         document.getElementById('lock-screen').style.display = 'none';
-        document.getElementById('viewer-ui').style.display = 'flex';
-        
+        document.getElementById('viewer').style.display = 'flex';
+        load();
+    }
+
+    // 2. RESPONSIVE PDF RENDERING (Fixed Cropping)
+    async function load() {
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         
-        pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-        document.getElementById('page-indicator').innerText = `Page 1 / ${pdfDoc.numPages}`;
-        renderPages();
-    }
+        const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+        document.getElementById('p-count').innerText = `Total Pages: ${pdf.numPages}`;
+        
+        const container = document.getElementById('content');
+        const screenWidth = window.innerWidth;
 
-    async function renderPages() {
-        const target = document.getElementById('render-target');
-        target.innerHTML = '';
-        for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const page = await pdfDoc.getPage(i);
-            const viewport = page.getViewport({ scale });
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            
+            // Calculate scale to fit the page exactly to the screen width
+            const unscaledViewport = page.getViewport({ scale: 1 });
+            const fitScale = (screenWidth - 20) / unscaledViewport.width;
+            
+            const viewport = page.getViewport({ scale: fitScale });
             const canvas = document.createElement('canvas');
-            const wrapper = document.createElement('div');
-            wrapper.className = 'page-container';
-            wrapper.appendChild(canvas);
-            target.appendChild(wrapper);
-
-            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            const ctx = canvas.getContext('2d');
+            
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            container.appendChild(canvas);
+            
+            await page.render({ canvasContext: ctx, viewport }).promise;
         }
     }
-
-    // 3. TOOLS
-    function changeZoom(delta) { scale += delta; renderPages(); }
-    
-    function toggleFullScreen() {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-    }
-
-    function toggleSidebar() {
-        const s = document.getElementById('sidebar');
-        s.style.display = s.style.display === 'none' ? 'flex' : 'none';
-    }
-
-    // Update page count on scroll
-    document.getElementById('scroll-area').addEventListener('scroll', (e) => {
-        const pages = document.querySelectorAll('.page-container');
-        for (let i = 0; i < pages.length; i++) {
-            if (pages[i].offsetTop > e.target.scrollTop - 100) {
-                document.getElementById('page-indicator').innerText = `Page ${i+1} / ${pdfDoc.numPages}`;
-                break;
-            }
-        }
-    });
 </script>
 </body>
 </html>
