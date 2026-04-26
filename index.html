@@ -2,124 +2,180 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Device-Locked PDF Reader</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ultimate Protected PDF</title>
     <style>
-        :root { --primary: #3b82f6; --bg: #f3f4f6; }
-        body { font-family: sans-serif; margin: 0; background: var(--bg); display: flex; justify-content: center; align-items: center; height: 100vh; }
-        
-        #lock-screen { text-align: center; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 350px; z-index: 1000; }
-        input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        #msg { color: #ef4444; font-size: 13px; margin-top: 10px; min-height: 18px; }
+        :root { --primary: #2563eb; --toolbar-h: 50px; --sidebar-w: 45px; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #1a1a1a; font-family: sans-serif; }
 
-        .rpv-container { display: none; width: 100%; height: 100%; flex-direction: column; background: white; }
-        /* (The rest of the viewer CSS from previous steps) */
-        .rpv-toolbar { height: 40px; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 10px; gap: 15px; }
-        .rpv-main { display: flex; flex: 1; overflow: hidden; }
-        .rpv-body { flex: 1; background: #eee; overflow-y: auto; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        canvas { background: white; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        /* --- Login Screen --- */
+        #lock-screen { position: fixed; inset: 0; background: white; z-index: 10000; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .login-card { width: 100%; max-width: 340px; text-align: center; }
+        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; margin: 20px 0; }
+        button.primary-btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+
+        /* --- Main Layout --- */
+        .viewer-container { display: none; flex-direction: column; height: 100vh; width: 100vw; }
+        
+        .toolbar { 
+            height: var(--toolbar-h); background: #fff; border-bottom: 1px solid #ddd;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 10;
+        }
+
+        .main-content { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        .sidebar { 
+            width: var(--sidebar-w); background: #f8f9fa; border-right: 1px solid #ddd; 
+            display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 20px;
+        }
+
+        .pdf-viewport { 
+            flex: 1; overflow-y: auto; overflow-x: auto; background: #525659; 
+            display: flex; flex-direction: column; align-items: center; padding: 15px;
+            scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+        }
+
+        /* --- Page Styling --- */
+        .page-container { background: white; margin-bottom: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-width: 100%; }
+        canvas { display: block; max-width: 100%; height: auto !important; }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .sidebar { display: none; } /* Hide sidebar on mobile */
+            .toolbar { height: 60px; font-size: 14px; }
+            .toolbar .desktop-only { display: none; }
+        }
+
+        /* --- Controls --- */
+        .controls-group { display: flex; align-items: center; gap: 10px; }
+        .status-msg { color: #dc2626; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="lock-screen">
-    <h2 style="margin:0">Device Locked</h2>
-    <p style="color:#666; font-size: 14px;">This document is locked to the first device that uses the password.</p>
-    <input type="password" id="pass-input" placeholder="Enter Access Code">
-    <button onclick="attemptAccess()">Unlock Viewer</button>
-    <div id="msg"></div>
+    <div class="login-card">
+        <h2>Secure Document</h2>
+        <p>This session is hardware-locked to your device.</p>
+        <input type="password" id="pass-input" placeholder="Access Code">
+        <button class="primary-btn" onclick="validateAccess()">Unlock Document</button>
+        <div id="msg" class="status-msg"></div>
+    </div>
 </div>
 
-<div id="viewer-ui" class="rpv-container" oncontextmenu="return false;">
-    <div class="rpv-toolbar">
-        <span id="zoom-percent">100%</span>
-        <div style="border-left: 1px solid #ddd; height: 20px;"></div>
-        <span>Page: <span id="page-num">1</span></span>
+<div id="viewer-ui" class="viewer-container" oncontextmenu="return false;">
+    <div class="toolbar">
+        <div class="controls-group">
+            <button onclick="toggleSidebar()" class="desktop-only">☰</button>
+            <span id="page-indicator">Page 1 / -</span>
+        </div>
+        <div class="controls-group">
+            <button onclick="changeZoom(-0.2)">➖</button>
+            <button onclick="changeZoom(0.2)">➕</button>
+            <button onclick="toggleFullScreen()">⛶</button>
+        </div>
     </div>
-    <div class="rpv-main">
-        <div class="rpv-body" id="scroll-container">
-            <div id="pdf-area"></div>
+
+    <div class="main-content">
+        <div class="sidebar" id="sidebar">
+            <span>🖼️</span><span>🔖</span><span>🔍</span>
+        </div>
+        <div class="pdf-viewport" id="scroll-area">
+            <div id="render-target"></div>
         </div>
     </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 <script>
-   // --- CONFIGURATION ---
-// Add as many passwords as you need here
-const AUTHORIZED_PASSWORDS = [
-    "PASS_USER_01", 
-    "PASS_USER_02"
-];
+    const PASSWORDS = ["PASS_USER_01", "PASS_USER_02"];
+    const pdfUrl = 'https://raw.githubusercontent.com/CoderMuhib10/pdfs/main/wordpress_30_day_plan.pdf';
 
-const pdfUrl = 'https://raw.githubusercontent.com/CoderMuhib10/pdfs/main/wordpress_30_day_plan.pdf';
+    // 1. ADVANCED FINGERPRINTING (Harder to spoof)
+    function getHardFingerprint() {
+        const gl = document.createElement('canvas').getContext('webgl');
+        const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+        const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
+        // Combine CPU cores, GPU info, and RAM (if available)
+        return btoa(`${navigator.hardwareConcurrency}-${gpu}-${navigator.maxTouchPoints > 0}`);
+    }
 
-
-    // --- DEVICE FINGERPRINTING LOGIC ---
-    function getDeviceId() {
-        // Creates a unique string based on user agent and screen resolution
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl');
-        const debugInfo = gl ? gl.getExtension('WEBGL_debug_renderer_info') : null;
-        const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "";
+    async function validateAccess() {
+        const pass = document.getElementById('pass-input').value;
+        const msg = document.getElementById('msg');
         
-        return btoa(`${navigator.userAgent}-${screen.width}x${screen.height}-${renderer}`);
+        if (!PASSWORDS.includes(pass)) {
+            msg.innerText = "Access denied."; return;
+        }
+
+        const deviceId = getHardFingerprint();
+        const storedId = localStorage.getItem(`lock_${pass}`);
+
+        if (!storedId) {
+            localStorage.setItem(`lock_${pass}`, deviceId);
+            startViewer();
+        } else if (storedId === deviceId) {
+            startViewer();
+        } else {
+            msg.innerText = "Error: Registered to a different hardware ID.";
+        }
     }
 
-   // --- UPDATED ACCESS LOGIC ---
-function attemptAccess() {
-    const input = document.getElementById('pass-input').value;
-    const msg = document.getElementById('msg');
-    const currentDevice = getDeviceId();
-    
-    // 1. Check if the password exists in our list
-    if (!AUTHORIZED_PASSWORDS.includes(input)) {
-        msg.innerText = "Invalid Access Code!";
-        return;
-    }
+    // 2. RESPONSIVE VIEWER LOGIC
+    let pdfDoc = null;
+    let scale = window.innerWidth < 768 ? 0.8 : 1.2;
 
-    // 2. We use the password as part of the key to distinguish between users
-    // This allows User A and User B to have separate device locks
-    const storageKey = `device_lock_${input}`;
-    const registeredDevice = localStorage.getItem(storageKey);
-
-    if (!registeredDevice) {
-        // First time this specific password is used: Lock it to this device
-        localStorage.setItem(storageKey, currentDevice);
-        unlock();
-    } else if (registeredDevice === currentDevice) {
-        // Returning user on the correct device
-        unlock();
-    } else {
-        // Correct password, but WRONG device
-        msg.innerText = "Error: This code is already registered to another device.";
-    }
-}
-
-    function unlock() {
+    async function startViewer() {
         document.getElementById('lock-screen').style.display = 'none';
         document.getElementById('viewer-ui').style.display = 'flex';
-        loadPDF();
-    }
-
-    // --- PDF RENDERING (Simplified for brevity) ---
-    async function loadPDF() {
+        
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         
-        const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-        const container = document.getElementById('pdf-area');
+        pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+        document.getElementById('page-indicator').innerText = `Page 1 / ${pdfDoc.numPages}`;
+        renderPages();
+    }
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.2 });
+    async function renderPages() {
+        const target = document.getElementById('render-target');
+        target.innerHTML = '';
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const viewport = page.getViewport({ scale });
             const canvas = document.createElement('canvas');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            container.appendChild(canvas);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'page-container';
+            wrapper.appendChild(canvas);
+            target.appendChild(wrapper);
+
             await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
         }
     }
+
+    // 3. TOOLS
+    function changeZoom(delta) { scale += delta; renderPages(); }
+    
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+    }
+
+    function toggleSidebar() {
+        const s = document.getElementById('sidebar');
+        s.style.display = s.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    // Update page count on scroll
+    document.getElementById('scroll-area').addEventListener('scroll', (e) => {
+        const pages = document.querySelectorAll('.page-container');
+        for (let i = 0; i < pages.length; i++) {
+            if (pages[i].offsetTop > e.target.scrollTop - 100) {
+                document.getElementById('page-indicator').innerText = `Page ${i+1} / ${pdfDoc.numPages}`;
+                break;
+            }
+        }
+    });
 </script>
 </body>
 </html>
