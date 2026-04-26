@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-74DCVR30B5"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-74DCVR30B5');
+</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Hardware-Locked Reader</title>
@@ -86,10 +96,20 @@
         }
     }
 
-    function success() {
-        localStorage.setItem('active_sess', 'true');
-        show();
+   
+function success(usedPassword) {
+    localStorage.setItem('active_sess', 'true');
+    
+    // This line sends the password info to your Google Analytics dashboard
+    if (typeof gtag === 'function') {
+        gtag('event', 'login', {
+            'event_category': 'Security',
+            'event_label': usedPassword
+        });
     }
+
+    show();
+}
 
     function show() {
         document.getElementById('lock-screen').style.display = 'none';
