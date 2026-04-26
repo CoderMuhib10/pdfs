@@ -3,148 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ultimate Protected PDF</title>
+    <title>Hardware-Locked Reader</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #333; font-family: sans-serif; overflow: hidden; }
-        
-        /* Login Screen */
-        #lock-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; align-items: center; justify-content: center; text-align: center; }
-        .box { padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 320px; }
-        input { width: 100%; padding: 14px; margin: 15px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        button.primary { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        
-        /* Viewer Layout */
-        #viewer-container { display: none; height: 100vh; flex-direction: column; width: 100%; }
-        .toolbar { height: 50px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .viewport { flex: 1; overflow-y: auto; overflow-x: hidden; background: #525659; display: flex; flex-direction: column; align-items: center; padding: 20px 0; -webkit-overflow-scrolling: touch; }
-        
-        /* Perfect Sizing */
-        canvas { 
-            display: block;
-            width: 95vw !important; /* Forces 95% of screen width */
-            height: auto !important; /* Preserves page height automatically */
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
-            background: white;
-        }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #222; font-family: sans-serif; }
+        #lock-screen { position: fixed; inset: 0; background: #fff; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .box { text-align: center; padding: 30px; width: 320px; box-shadow: 0 5px 30px rgba(0,0,0,0.1); border-radius: 12px; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        #viewer { display: none; height: 100vh; flex-direction: column; }
+        .toolbar { height: 45px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 15px; justify-content: space-between; font-size: 14px; }
+        .viewport { flex: 1; overflow: auto; background: #555; display: flex; flex-direction: column; align-items: center; padding: 20px 0; }
+        canvas { width: 95vw !important; height: auto !important; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); background: #fff; }
     </style>
 </head>
 <body>
 
 <div id="lock-screen">
     <div class="box">
-        <h2 style="margin:0">Secure Access</h2>
-        <p style="font-size: 13px; color: #666;">Enter your code to unlock the document.</p>
-        <input type="password" id="pass-input" placeholder="Access Code">
-        <button class="primary" onclick="handleLogin()">Unlock Document</button>
-        <p id="err" style="color:#ef4444; font-size:13px; margin-top:10px;"></p>
+        <h2 style="margin:0">Device Locked</h2>
+        <p style="font-size: 12px; color: #777;">This content is locked to your specific hardware.</p>
+        <input type="password" id="p-input" placeholder="Access Code">
+        <button onclick="verify()">Unlock</button>
+        <p id="msg" style="color:red; font-size:12px; margin-top:10px;"></p>
     </div>
 </div>
 
-<div id="viewer-container" oncontextmenu="return false;">
+<div id="viewer" oncontextmenu="return false;">
     <div class="toolbar">
-        <span id="p-info" style="font-weight:bold; color:#444;">Loading...</span>
-        <button onclick="handleLogout()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #ddd; border-radius: 5px; cursor: pointer;">Logout</button>
+        <span id="p-label">Loading...</span>
+        <button onclick="localStorage.removeItem('active_sess'); location.reload();">Logout</button>
     </div>
-    <div class="viewport" id="scroll-box">
-        <div id="content-target"></div>
+    <div class="viewport" id="scroll">
+        <div id="content"></div>
     </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 <script>
     const PASSWORDS = ["PASS_USER_01", "PASS_USER_02"];
-    const pdfUrl = 'https://raw.githubusercontent.com/CoderMuhib10/pdfs/main/wordpress_30_day_plan.pdf';
+    const pdfUrl = 'YOUR_RAW_GITHUB_LINK_HERE';
 
-    // 1. UNIQUE BROWSER IDENTIFICATION
-    function getBrowserUID() {
-        let uid = localStorage.getItem('secure_reader_uid');
-        if (!uid) {
-            uid = 'uid-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
-            localStorage.setItem('secure_reader_uid', uid);
-        }
-        return uid;
+    // 1. GENERATE HARDWARE FINGERPRINT (Unique to physical machine)
+    function getHardwareFingerprint() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl');
+        const debugInfo = gl ? gl.getExtension('WEBGL_debug_renderer_info') : null;
+        const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "unknown";
+        
+        // Combine CPU, GPU, and Screen Specs
+        const id = `${navigator.hardwareConcurrency}-${renderer}-${screen.colorDepth}`;
+        return btoa(id);
     }
 
-    // 2. CHECK SESSION ON LOAD (The "Remember Me" Logic)
+    // 2. SESSION CHECK
     window.onload = function() {
-        const sessionActive = localStorage.getItem('secure_session_active');
-        if (sessionActive === 'true') {
-            showViewer();
-        }
+        if (localStorage.getItem('active_sess') === 'true') show();
     };
 
-    function handleLogin() {
-        const pass = document.getElementById('pass-input').value;
-        const err = document.getElementById('err');
+    function verify() {
+        const input = document.getElementById('p-input').value;
+        const msg = document.getElementById('msg');
         
-        if (!PASSWORDS.includes(pass)) {
-            err.innerText = "Invalid access code.";
+        if (!PASSWORDS.includes(input)) {
+            msg.innerText = "Invalid Password.";
             return;
         }
 
-        const myUID = getBrowserUID();
-        const globalLockKey = `lock_record_${pass}`;
-        const lockedTo = localStorage.getItem(globalLockKey);
+        const currentHW = getHardwareFingerprint();
+        const lockKey = `hw_lock_${input}`;
+        const storedHW = localStorage.getItem(lockKey);
 
-        // LOCKING LOGIC
-        if (!lockedTo) {
-            // First time use: Bind this password to this UID
-            localStorage.setItem(globalLockKey, myUID);
-            proceed();
-        } else if (lockedTo === myUID) {
-            // Returning to the same browser
-            proceed();
+        if (!storedHW) {
+            // First time this password is used: Permanently lock to this hardware
+            localStorage.setItem(lockKey, currentHW);
+            success();
+        } else if (storedHW === currentHW) {
+            // Hardware matches stored record
+            success();
         } else {
-            // Trying to use same pass on different browser/device
-            err.innerText = "This code is locked to another device.";
+            // Password is correct, but hardware fingerprint is different
+            msg.innerText = "Error: This code is registered to another physical device.";
         }
     }
 
-    function proceed() {
-        localStorage.setItem('secure_session_active', 'true');
-        showViewer();
+    function success() {
+        localStorage.setItem('active_sess', 'true');
+        show();
     }
 
-    function showViewer() {
+    function show() {
         document.getElementById('lock-screen').style.display = 'none';
-        document.getElementById('viewer-container').style.display = 'flex';
-        renderPDF();
+        document.getElementById('viewer').style.display = 'flex';
+        render();
     }
 
-    function handleLogout() {
-        localStorage.removeItem('secure_session_active');
-        location.reload();
-    }
-
-    // 3. PERFECT SCALING RENDERING
-    async function renderPDF() {
+    // 3. RENDER PDF (Fit to screen width)
+    async function render() {
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/api/pdf.js/3.4.120/pdf.worker.min.js';
         
         try {
             const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-            document.getElementById('p-info').innerText = `Total Pages: ${pdf.numPages}`;
-            const target = document.getElementById('content-target');
+            document.getElementById('p-label').innerText = `Pages: ${pdf.numPages}`;
+            const target = document.getElementById('content');
             
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
-                
-                // We render at a standard high quality (scale 1.5)
-                // The CSS 'width: 95vw' handles the responsive scaling perfectly
-                const viewport = page.getViewport({ scale: 1.5 });
+                const viewport = page.getViewport({ scale: 1.5 }); // Good quality
                 const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
                 target.appendChild(canvas);
-                
-                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
             }
-        } catch (e) {
-            alert("Error loading PDF. Please check your GitHub link.");
-        }
+        } catch (e) { alert("PDF failed to load. Check your link."); }
     }
 </script>
 </body>
